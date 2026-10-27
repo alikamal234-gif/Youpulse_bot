@@ -34,6 +34,13 @@ class ChannelStore {
       if (fs.existsSync(CONFIG_FILE)) {
         const raw = fs.readFileSync(CONFIG_FILE, "utf-8");
         const data = JSON.parse(raw);
+        if (data && data.channelId === null) {
+          this.configuredChannelId = null;
+          this.updatedAt = data.updatedAt || null;
+          this.updatedBy = data.updatedBy || null;
+          logger.info("[ChannelStore] Salon explicitement désactivé (unset) par l'utilisateur.");
+          return;
+        }
         if (data && isValidSnowflake(data.channelId)) {
           this.configuredChannelId = data.channelId;
           this.updatedAt = data.updatedAt || null;
@@ -103,6 +110,34 @@ class ChannelStore {
     } catch (err) {
       logger.error(`[ChannelStore] Erreur lors de la sauvegarde du salon dans ${CONFIG_FILE} : ${err.message}`);
       // La valeur reste en mémoire même si l'écriture disque échoue
+      return false;
+    }
+  }
+
+  /**
+   * Supprime/retire le salon configuré (l'inverse de setchannel).
+   * @param {string} [userId="UNKNOWN"]
+   * @returns {boolean}
+   */
+  unsetChannelId(userId = "UNKNOWN") {
+    this.configuredChannelId = null;
+    this.updatedAt = new Date().toISOString();
+    this.updatedBy = userId;
+
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      const payload = {
+        channelId: null,
+        updatedAt: this.updatedAt,
+        updatedBy: this.updatedBy
+      };
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(payload, null, 2), "utf-8");
+      logger.info(`[ChannelStore] Salon supprimé/désactivé par ${userId}`);
+      return true;
+    } catch (err) {
+      logger.error(`[ChannelStore] Erreur lors de la suppression du salon dans ${CONFIG_FILE} : ${err.message}`);
       return false;
     }
   }

@@ -37,8 +37,10 @@ export async function execute(interaction) {
         name: "🔐 Commandes Administrateur (Propriétaire uniquement)",
         value:
           "• `/setchannel [salon]` — Définit le salon Discord de relais actif.\n" +
-          "• `/status` — Affiche l'état du salon, la connexion et les diagnostics.\n" +
+          "• `/unsetchannel` — Retire le salon configuré (désactive le relais).\n" +
+          "• `/privatemessage [msg] [fichier]` — Diffuse un message privé officiel à tous les membres du serveur.\n" +
           "• `/send [message] [piece_jointe]` — Envoie un message dans le salon configuré.\n" +
+          "• `/status` — Affiche l'état du salon, la connexion et les diagnostics.\n" +
           "• `/testdm` — Envoie un message test en MP au propriétaire pour vérifier la réception."
       }
     )

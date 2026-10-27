@@ -4,8 +4,10 @@
 import * as pingCommand from "./ping.js";
 import * as helpCommand from "./help.js";
 import * as setchannelCommand from "./setchannel.js";
+import * as unsetchannelCommand from "./unsetchannel.js";
 import * as statusCommand from "./status.js";
 import * as testdmCommand from "./testdm.js";
+import * as privatemessageCommand from "./privatemessage.js";
 import * as sendCommand from "./send.js";
 import * as uptimeCommand from "./uptime.js";
 
@@ -13,8 +15,10 @@ export const commands = [
   pingCommand,
   helpCommand,
   setchannelCommand,
+  unsetchannelCommand,
   statusCommand,
   testdmCommand,
+  privatemessageCommand,
   sendCommand,
   uptimeCommand
 ];

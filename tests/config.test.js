@@ -29,3 +29,27 @@ test("Module Config : Validation des identifiants Discord (Snowflakes)", async (
     assert.equal(isValidSnowflake({}), false);
   });
 });
+
+test("Service ChannelStore : Configuration et Suppression (unset) du salon", async (t) => {
+  const { channelStore } = await import("../src/services/channelStore.js");
+  const originalChannelId = channelStore.getChannelId();
+
+  await t.test("Définit et sauvegarde un salon valide", () => {
+    const success = channelStore.setChannelId("112233445566778899", "TEST_USER");
+    assert.equal(success, true);
+    assert.equal(channelStore.getChannelId(), "112233445566778899");
+    assert.equal(channelStore.isConfigured(), true);
+  });
+
+  await t.test("Supprime (unset) le salon avec succès", () => {
+    const success = channelStore.unsetChannelId("TEST_USER");
+    assert.equal(success, true);
+    assert.equal(channelStore.getChannelId(), null);
+    assert.equal(channelStore.isConfigured(), false);
+  });
+
+  // Restauration de l'état initial pour ne pas perturber l'environnement de dev
+  if (originalChannelId) {
+    channelStore.setChannelId(originalChannelId, "RESTORE");
+  }
+});

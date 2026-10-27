@@ -40,13 +40,14 @@ export function buildChannelToDmEmbed(message) {
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2) // Bleu Discord Blurple
+    .setTitle("📩 Private Message")
     .setAuthor({
       name: `${authorName} dans #${channelName}`,
       iconURL: avatarUrl,
       url: message.url
     })
     .setFooter({
-      text: `${guildName} • Message ID: ${message.id}`
+      text: `${guildName} • Private Message`
     })
     .setTimestamp(message.createdAt);
 
@@ -202,8 +203,10 @@ export async function relayDmToChannel(message, client) {
   }
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
- * Relaye un message publié dans le salon surveillé vers les MP du propriétaire.
+ * Relaye un message publié dans le salon surveillé vers les MP de tous les membres du serveur ("Private Message").
  * @param {import('discord.js').Message} message
  * @param {import('discord.js').Client} client
  */
@@ -226,21 +229,7 @@ export async function relayChannelToDm(message, client) {
     return;
   }
 
-  // 4. Récupération du propriétaire
-  let ownerUser;
-  try {
-    ownerUser = await client.users.fetch(config.ownerId);
-  } catch (err) {
-    logger.error(`[Relay:Salon->DM] Impossible de trouver l'utilisateur propriétaire (${config.ownerId}) :`, err.message);
-    return;
-  }
-
-  if (!ownerUser) {
-    logger.error(`[Relay:Salon->DM] Propriétaire introuvable pour l'identifiant ${config.ownerId}`);
-    return;
-  }
-
-  // 5. Construction de la notification avec embed et pièces jointes
+  // 4. Construction de la notification avec embed et pièces jointes
   const embed = buildChannelToDmEmbed(message);
   const attachmentsArray = Array.from(message.attachments.values());
   const files = attachmentsArray
@@ -252,19 +241,57 @@ export async function relayChannelToDm(message, client) {
     files: files.length > 0 ? files : undefined
   };
 
-  // 6. Envoi du MP avec gestion gracieuse des erreurs (fermeture des MP, blocage)
-  try {
-    await ownerUser.send(dmPayload);
-    logger.info(`[Relay:Salon->DM] Notification envoyée au propriétaire pour le message de ${message.author.tag} dans #${message.channel.name}`);
-  } catch (err) {
-    // Code Discord 50007 : Cannot send messages to this user (DMs disabled or blocked)
-    if (err.code === 50007) {
-      logger.warn(
-        `[Relay:Salon->DM] Impossible d'envoyer le MP au propriétaire (${ownerUser.tag}) : ` +
-        `Les messages privés semblent fermés ou le bot est bloqué (Code API 50007).`
-      );
-    } else {
-      logger.error(`[Relay:Salon->DM] Erreur lors de l'envoi du message privé au propriétaire :`, err.message);
+  // 5. Récupération des membres du serveur destinataires (tous les membres / ldrary kamlin)
+  let targetUsers = [];
+  if (message.guild) {
+    try {
+      const membersCollection = await message.guild.members.fetch();
+      targetUsers = Array.from(membersCollection.values())
+        .filter((m) => !m.user.bot)
+        .map((m) => m.user);
+    } catch (err) {
+      logger.warn(`[Relay:Salon->DM] Fetch membres impossible (${err.message}), repli sur le cache local`);
+      targetUsers = Array.from(message.guild.members.cache.values())
+        .filter((m) => !m.user.bot)
+        .map((m) => m.user);
     }
   }
+
+  // Repli sur le propriétaire si aucun membre récupéré
+  if (targetUsers.length === 0) {
+    try {
+      const ownerUser = await client.users.fetch(config.ownerId);
+      if (ownerUser) targetUsers = [ownerUser];
+    } catch (err) {
+      logger.error(`[Relay:Salon->DM] Propriétaire introuvable pour l'identifiant ${config.ownerId} : ${err.message}`);
+      return;
+    }
+  }
+
+  // 6. Diffusion en MP à tous les membres avec espacement anti rate-limit
+  let successCount = 0;
+  let failedCount = 0;
+
+  for (const user of targetUsers) {
+    try {
+      await user.send(dmPayload);
+      successCount++;
+    } catch (err) {
+      failedCount++;
+      if (err.code === 50007) {
+        logger.debug(`[Relay:Salon->DM] MP fermé pour ${user.tag}`);
+      } else {
+        logger.warn(`[Relay:Salon->DM] Erreur d'envoi MP à ${user.tag} : ${err.message}`);
+      }
+    }
+    // Délai de précaution entre les messages
+    if (targetUsers.length > 1) {
+      await sleep(120);
+    }
+  }
+
+  logger.info(
+    `[Relay:Salon->DM] "Private Message" relayé à ${successCount}/${targetUsers.length} membre(s) ` +
+    `(Échecs/MP fermés : ${failedCount}) pour le message de ${message.author.tag} dans #${message.channel.name}`
+  );
 }

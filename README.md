@@ -232,8 +232,10 @@ Une fois démarré, vous devriez observer un affichage similaire à :
 | `/help` | 🌐 Tout le monde | Affiche le manuel d'utilisation et les privilèges. |
 | `/uptime` | 🌐 Tout le monde | Affiche le temps de fonctionnement du bot et sa date de démarrage. |
 | `/setchannel` | 🔒 Propriétaire | Configure le salon actif de publication et de notifications. |
-| `/status` | 🔒 Propriétaire | Diagnostics complets : salon actif, mémoire RAM, latence, ID propriétaire. |
+| `/unsetchannel` | 🔒 Propriétaire | Supprime le salon configuré (désactive le relais vers/depuis le salon). |
+| `/privatemessage` | 🔒 Propriétaire | Diffuse un message privé officiel (sans mention de test) à tous les membres du serveur. |
 | `/send` | 🔒 Propriétaire | Publie un message et/ou une pièce jointe dans le salon configuré. |
+| `/status` | 🔒 Propriétaire | Diagnostics complets : salon actif, mémoire RAM, latence, ID propriétaire. |
 | `/testdm` | 🔒 Propriétaire | Envoie un message privé de test pour vérifier la réception des alertes. |
 
 > **Sécurité** : Si un membre quelconque tente d'exécuter une commande réservée au propriétaire, il reçoit une réponse éphémère d'accès refusé (`⛔ Accès refusé`) et l'incident est consigné dans les logs.
