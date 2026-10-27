@@ -19,11 +19,15 @@ export async function execute(message) {
       if (message.author.id === message.client.user.id) {
         return;
       }
+      logger.info(`[MessageCreate:DM] Reçu de ${message.author.tag} : "${message.content}"`);
       await relayDmToChannel(message, message.client);
       return;
     }
 
     // Cas 2 : Message dans un salon de serveur
+    if (message.author.id === message.client.user.id) {
+      return;
+    }
     await relayChannelToDm(message, message.client);
   } catch (err) {
     logger.error("[Event:messageCreate] Erreur non gérée lors du traitement du message :", err);

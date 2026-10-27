@@ -229,6 +229,8 @@ export async function relayChannelToDm(message, client) {
     return;
   }
 
+  logger.info(`[Relay:Salon->DM] Message détecté dans #${message.channel.name} de ${message.author.tag} : "${message.content}"`);
+
   // 4. Construction de la notification avec embed et pièces jointes
   const embed = buildChannelToDmEmbed(message);
   const attachmentsArray = Array.from(message.attachments.values());
@@ -242,31 +244,40 @@ export async function relayChannelToDm(message, client) {
   };
 
   // 5. Récupération des membres du serveur destinataires (tous les membres / ldrary kamlin)
-  let targetUsers = [];
+  const targetUsersMap = new Map();
+
+  // A. Toujours inclure le propriétaire de façon garantie
+  try {
+    const ownerUser = await client.users.fetch(config.ownerId);
+    if (ownerUser) {
+      targetUsersMap.set(ownerUser.id, ownerUser);
+    }
+  } catch (err) {
+    logger.warn(`[Relay:Salon->DM] Impossible de récupérer le propriétaire (${config.ownerId}) : ${err.message}`);
+  }
+
+  // B. Récupérer les membres du serveur
   if (message.guild) {
     try {
-      const membersCollection = await message.guild.members.fetch();
-      targetUsers = Array.from(membersCollection.values())
-        .filter((m) => !m.user.bot)
-        .map((m) => m.user);
-    } catch (err) {
-      logger.warn(`[Relay:Salon->DM] Fetch membres impossible (${err.message}), repli sur le cache local`);
-      targetUsers = Array.from(message.guild.members.cache.values())
-        .filter((m) => !m.user.bot)
-        .map((m) => m.user);
+      // Timeout de 2 secondes max pour éviter de bloquer si l'intent GuildMembers n'est pas activé
+      const membersCollection = await message.guild.members.fetch({ time: 2000 });
+      for (const m of membersCollection.values()) {
+        if (!m.user.bot) {
+          targetUsersMap.set(m.user.id, m.user);
+        }
+      }
+    } catch {
+      // Repli sur les membres du cache local
+      for (const m of message.guild.members.cache.values()) {
+        if (!m.user.bot) {
+          targetUsersMap.set(m.user.id, m.user);
+        }
+      }
     }
   }
 
-  // Repli sur le propriétaire si aucun membre récupéré
-  if (targetUsers.length === 0) {
-    try {
-      const ownerUser = await client.users.fetch(config.ownerId);
-      if (ownerUser) targetUsers = [ownerUser];
-    } catch (err) {
-      logger.error(`[Relay:Salon->DM] Propriétaire introuvable pour l'identifiant ${config.ownerId} : ${err.message}`);
-      return;
-    }
-  }
+  const targetUsers = Array.from(targetUsersMap.values());
+  logger.info(`[Relay:Salon->DM] Début de la transmission en MP à ${targetUsers.length} destinataire(s)...`);
 
   // 6. Diffusion en MP à tous les membres avec espacement anti rate-limit
   let successCount = 0;
@@ -276,12 +287,13 @@ export async function relayChannelToDm(message, client) {
     try {
       await user.send(dmPayload);
       successCount++;
+      logger.info(`[Relay:Salon->DM] ✅ MP transmis avec succès à ${user.tag}`);
     } catch (err) {
       failedCount++;
       if (err.code === 50007) {
-        logger.debug(`[Relay:Salon->DM] MP fermé pour ${user.tag}`);
+        logger.warn(`[Relay:Salon->DM] ⚠️ MP fermé pour ${user.tag} (Vérifier les paramètres de confidentialité)`);
       } else {
-        logger.warn(`[Relay:Salon->DM] Erreur d'envoi MP à ${user.tag} : ${err.message}`);
+        logger.error(`[Relay:Salon->DM] ❌ Erreur d'envoi MP à ${user.tag} : ${err.message}`);
       }
     }
     // Délai de précaution entre les messages
@@ -291,7 +303,7 @@ export async function relayChannelToDm(message, client) {
   }
 
   logger.info(
-    `[Relay:Salon->DM] "Private Message" relayé à ${successCount}/${targetUsers.length} membre(s) ` +
+    `[Relay:Salon->DM] "Private Message" terminé : ${successCount}/${targetUsers.length} reçu(s) ` +
     `(Échecs/MP fermés : ${failedCount}) pour le message de ${message.author.tag} dans #${message.channel.name}`
   );
 }
