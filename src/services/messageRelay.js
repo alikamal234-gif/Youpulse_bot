@@ -36,6 +36,67 @@ export function validateAttachmentSizes(attachments = []) {
 }
 
 /**
+ * Vérifie si un salon est un salon anonyme (ex: anonyme, annonime, confessions).
+ * @param {import('discord.js').GuildBasedChannel|null} channel
+ * @returns {boolean}
+ */
+export function isAnonymousChannel(channel) {
+  if (!channel || !channel.name) return false;
+  const name = channel.name.toLowerCase();
+  return name.includes("anonym") || name.includes("annonim") || name.includes("confession");
+}
+
+/**
+ * Construit le payload standardisé pour un message anonyme (Embed cadre identique pour tous).
+ * @param {string} content
+ * @param {Array<{ url: string, name?: string, size?: number, contentType?: string }>} attachments
+ * @returns {{ embeds: import('discord.js').EmbedBuilder[], files?: import('discord.js').AttachmentBuilder[] }}
+ */
+export function buildAnonymousPayload(content, attachments = []) {
+  let cleanContent = (content || "").trim();
+  cleanContent = cleanContent.replace(/^[/!](?:anonyme|annonime|anonymous|confession)\s*/i, "");
+
+  const embed = new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setTitle("🎭 Message Anonyme")
+    .setDescription(cleanContent || "*(Pièce jointe anonyme)*")
+    .setFooter({
+      text: "Message 100% Anonyme • Identité masquée 🔒"
+    })
+    .setTimestamp();
+
+  const files = [];
+  const attachmentsList = Array.isArray(attachments)
+    ? attachments
+    : Array.from(attachments.values ? attachments.values() : []);
+
+  const firstImage = attachmentsList.find((att) =>
+    att.contentType?.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(att.name || "")
+  );
+
+  if (firstImage) {
+    embed.setImage(firstImage.url);
+  }
+
+  for (const att of attachmentsList) {
+    if (att !== firstImage) {
+      const sizeStr = att.size ? ` (${(att.size / 1024).toFixed(1)} Ko)` : "";
+      embed.addFields({
+        name: "📎 Fichier joint",
+        value: `[${att.name || "fichier"}](${att.url})${sizeStr}`
+      });
+    }
+    files.push(new AttachmentBuilder(att.url, { name: att.name || "fichier-anonyme" }));
+  }
+
+  const payload = { embeds: [embed] };
+  if (files.length > 0) {
+    payload.files = files;
+  }
+  return payload;
+}
+
+/**
  * Construit les données de l'embed pour la notification envoyée en MP au propriétaire.
  * @param {import('discord.js').Message} message
  * @returns {import('discord.js').EmbedBuilder}
@@ -201,13 +262,17 @@ export async function relayDmToChannel(message, client) {
     const targetChannel = parsed.channel;
     const finalContent = parsed.text || (hasAttachments ? "" : message.content);
 
-    const files = attachmentsArray.map((att) =>
-      new AttachmentBuilder(att.url, { name: att.name || "piece-jointe" })
-    );
-
-    const payload = {};
-    if (finalContent) payload.content = finalContent;
-    if (files.length > 0) payload.files = files;
+    let payload;
+    if (isAnonymousChannel(targetChannel)) {
+      payload = buildAnonymousPayload(finalContent, attachmentsArray);
+    } else {
+      const files = attachmentsArray.map((att) =>
+        new AttachmentBuilder(att.url, { name: att.name || "piece-jointe" })
+      );
+      payload = {};
+      if (finalContent) payload.content = finalContent;
+      if (files.length > 0) payload.files = files;
+    }
 
     try {
       const sentMessage = await targetChannel.send(payload);
@@ -353,16 +418,20 @@ export async function handleSelectChannelInteraction(interaction) {
     }
   }
 
-  const files = pending.attachments.map((att) =>
-    new AttachmentBuilder(att.url, { name: att.name || "piece-jointe" })
-  );
-
-  const payload = {};
-  if (pending.content && pending.content.trim().length > 0) {
-    payload.content = pending.content;
-  }
-  if (files.length > 0) {
-    payload.files = files;
+  let payload;
+  if (isAnonymousChannel(targetChannel)) {
+    payload = buildAnonymousPayload(pending.content, pending.attachments);
+  } else {
+    const files = pending.attachments.map((att) =>
+      new AttachmentBuilder(att.url, { name: att.name || "piece-jointe" })
+    );
+    payload = {};
+    if (pending.content && pending.content.trim().length > 0) {
+      payload.content = pending.content;
+    }
+    if (files.length > 0) {
+      payload.files = files;
+    }
   }
 
   try {
@@ -539,30 +608,9 @@ export async function relayAnonymousDm(message, client) {
     return;
   }
 
-  // Construction de l'embed anonyme (sans nom d'auteur)
-  const embed = new EmbedBuilder()
-    .setColor(0x2b2d31)
-    .setTitle("🎭 Message Anonyme")
-    .setDescription(hasText ? cleanText : "*(Pièce jointe anonyme)*")
-    .setFooter({ text: "Posté anonymement depuis les MP • Identité masquée 🔒" })
-    .setTimestamp();
-
-  const files = [];
-  const firstImage = attachmentsArray.find((att) =>
-    att.contentType?.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(att.name)
-  );
-  if (firstImage) {
-    embed.setImage(firstImage.url);
-  }
-
-  for (const att of attachmentsArray) {
-    files.push(new AttachmentBuilder(att.url, { name: att.name || "fichier-anonyme" }));
-  }
+  const payload = buildAnonymousPayload(cleanText, attachmentsArray);
 
   try {
-    const payload = { embeds: [embed] };
-    if (files.length > 0) payload.files = files;
-
     const sent = await targetChannel.send(payload);
     logger.info(`[Relay:AnonymousDM] Message anonyme transmis avec succès dans #${targetChannel.name} (ID: ${sent.id})`);
 

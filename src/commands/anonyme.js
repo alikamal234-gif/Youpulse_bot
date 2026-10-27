@@ -4,12 +4,10 @@
  */
 import {
   SlashCommandBuilder,
-  EmbedBuilder,
-  AttachmentBuilder,
   PermissionsBitField,
   MessageFlags
 } from "discord.js";
-import { MAX_ATTACHMENT_SIZE_BYTES } from "../services/messageRelay.js";
+import { MAX_ATTACHMENT_SIZE_BYTES, buildAnonymousPayload } from "../services/messageRelay.js";
 import { logger } from "../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
@@ -99,36 +97,9 @@ export async function execute(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // 4. Construction de l'Embed Anonyme (Zéro trace de l'auteur)
-  const embed = new EmbedBuilder()
-    .setColor(0x2b2d31) // Thème sobre et discret
-    .setTitle("🎭 Message Anonyme")
-    .setDescription(messageText)
-    .setFooter({
-      text: "Message 100% Anonyme • Identité masquée 🔒"
-    })
-    .setTimestamp();
-
-  const files = [];
-  if (attachment) {
-    if (attachment.contentType?.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(attachment.name)) {
-      embed.setImage(attachment.url);
-    } else {
-      embed.addFields({
-        name: "📎 Fichier joint",
-        value: `[${attachment.name}](${attachment.url}) (${(attachment.size / 1024).toFixed(1)} Ko)`
-      });
-    }
-    files.push(new AttachmentBuilder(attachment.url, { name: attachment.name }));
-  }
-
-  // 5. Envoi dans le salon anonyme
+  // 4. Construction et envoi du message avec le cadre anonyme standardisé
   try {
-    const payload = { embeds: [embed] };
-    if (files.length > 0) {
-      payload.files = files;
-    }
-
+    const payload = buildAnonymousPayload(messageText, attachment ? [attachment] : []);
     const sentMessage = await targetChannel.send(payload);
     logger.info(`[Command:anonyme] Message anonyme publié avec succès dans #${targetChannel.name} (ID: ${sentMessage.id})`);
 

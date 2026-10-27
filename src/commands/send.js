@@ -11,7 +11,7 @@ import {
 } from "discord.js";
 import { config } from "../config.js";
 import { channelStore } from "../services/channelStore.js";
-import { MAX_ATTACHMENT_SIZE_BYTES } from "../services/messageRelay.js";
+import { isAnonymousChannel, buildAnonymousPayload, MAX_ATTACHMENT_SIZE_BYTES } from "../services/messageRelay.js";
 import { logger } from "../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
@@ -127,12 +127,16 @@ export async function execute(interaction) {
 
   // 6. Envoi du message
   try {
-    const sendPayload = {
-      content: messageText
-    };
-
-    if (attachment) {
-      sendPayload.files = [new AttachmentBuilder(attachment.url, { name: attachment.name })];
+    let sendPayload;
+    if (isAnonymousChannel(targetChannel)) {
+      sendPayload = buildAnonymousPayload(messageText, attachment ? [attachment] : []);
+    } else {
+      sendPayload = {
+        content: messageText
+      };
+      if (attachment) {
+        sendPayload.files = [new AttachmentBuilder(attachment.url, { name: attachment.name })];
+      }
     }
 
     const sentMessage = await targetChannel.send(sendPayload);

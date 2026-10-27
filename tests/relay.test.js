@@ -234,3 +234,37 @@ test("Commande Annonime : Alias vérifié", async () => {
   assert.equal(typeof annonimeCmd.execute, "function");
 });
 
+test("Service Relay : Cadre identique pour messages anonymes (Admin & Membres)", async (t) => {
+  const { isAnonymousChannel, buildAnonymousPayload } = await import("../src/services/messageRelay.js");
+
+  await t.test("isAnonymousChannel : détecte les salons anonymes et variantes", () => {
+    assert.equal(isAnonymousChannel({ name: "anonyme" }), true);
+    assert.equal(isAnonymousChannel({ name: "annonime" }), true);
+    assert.equal(isAnonymousChannel({ name: "confessions" }), true);
+    assert.equal(isAnonymousChannel({ name: "salon-anonyme-test" }), true);
+    assert.equal(isAnonymousChannel({ name: "general" }), false);
+    assert.equal(isAnonymousChannel({ name: "annonces" }), false);
+    assert.equal(isAnonymousChannel(null), false);
+  });
+
+  await t.test("buildAnonymousPayload : produit l'embed cadre identique", () => {
+    const payload = buildAnonymousPayload("Ceci est un message test");
+    assert.ok(payload.embeds && payload.embeds.length === 1);
+    const embed = payload.embeds[0];
+    assert.equal(embed.data.title, "🎭 Message Anonyme");
+    assert.equal(embed.data.description, "Ceci est un message test");
+    assert.equal(embed.data.color, 0x2b2d31);
+    assert.equal(embed.data.footer.text, "Message 100% Anonyme • Identité masquée 🔒");
+  });
+
+  await t.test("buildAnonymousPayload : nettoie le préfixe /annonime et gère les pièces jointes", () => {
+    const payload = buildAnonymousPayload("/annonime mon secret", [
+      { name: "photo.png", url: "https://example.com/photo.png", contentType: "image/png" }
+    ]);
+    const embed = payload.embeds[0];
+    assert.equal(embed.data.description, "mon secret");
+    assert.equal(embed.data.image.url, "https://example.com/photo.png");
+    assert.equal(payload.files.length, 1);
+  });
+});
+
