@@ -8,6 +8,8 @@ import * as unsetchannelCommand from "./unsetchannel.js";
 import * as statusCommand from "./status.js";
 import * as testdmCommand from "./testdm.js";
 import * as sendCommand from "./send.js";
+import * as anonymeCommand from "./anonyme.js";
+import * as annonimeCommand from "./annonime.js";
 import * as uptimeCommand from "./uptime.js";
 
 export const commands = [
@@ -18,6 +20,8 @@ export const commands = [
   statusCommand,
   testdmCommand,
   sendCommand,
+  anonymeCommand,
+  annonimeCommand,
   uptimeCommand
 ];
 

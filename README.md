@@ -228,16 +228,31 @@ Une fois démarré, vous devriez observer un affichage similaire à :
 
 | Commande | Accès | Description |
 | :--- | :--- | :--- |
+| `/anonyme` | 🌐 Tout le monde | Envoie un message 100% anonyme dans le salon `#anonyme` (sans nom d'auteur ni avatar). |
+| `/annonime` | 🌐 Tout le monde | Alias identique à `/anonyme` pour plus de flexibilité orthographique. |
 | `/ping` | 🌐 Tout le monde | Mesure la latence WebSocket et le temps de réponse API. |
 | `/help` | 🌐 Tout le monde | Affiche le manuel d'utilisation et les privilèges. |
 | `/uptime` | 🌐 Tout le monde | Affiche le temps de fonctionnement du bot et sa date de démarrage. |
-| `/setchannel` | 🔒 Propriétaire | Configure le salon actif de publication et de notifications. |
+| `/send` | 🛡️ Admin / Propriétaire | Publie un message et/ou une pièce jointe dans n'importe quel salon du serveur (option `salon`). |
+| `/setchannel` | 🔒 Propriétaire | Configure le salon actif de publication et de notifications Private Message. |
 | `/unsetchannel` | 🔒 Propriétaire | Supprime le salon configuré (désactive le relais vers/depuis le salon). |
-| `/send` | 🔒 Propriétaire | Publie un message et/ou une pièce jointe dans le salon configuré. |
 | `/status` | 🔒 Propriétaire | Diagnostics complets : salon actif, mémoire RAM, latence, ID propriétaire. |
 | `/testdm` | 🔒 Propriétaire | Envoie un message privé de test pour vérifier la réception des alertes. |
 
-> **Sécurité** : Si un membre quelconque tente d'exécuter une commande réservée au propriétaire, il reçoit une réponse éphémère d'accès refusé (`⛔ Accès refusé`) et l'incident est consigné dans les logs.
+---
+
+## 💬 Fonctionnalités en Message Privé (MP avec le Bot)
+
+Lorsque vous envoyez un message directement en MP au bot :
+
+1. **Si vous êtes un Membre Standard** :
+   - Le bot relaie immédiatement votre message ou image dans le salon **`#anonyme`** (ou `#annonime`).
+   - Votre identité (nom, pseudo, avatar) est **strictement masquée**.
+   - Vous pouvez également taper `/annonime votre message` ou simplement votre texte.
+
+2. **Si vous êtes Administrateur ou Propriétaire du serveur** :
+   - **Choix par menu déroulant** : Le bot vous répond en MP avec un menu interactif contenant la liste de **tous les salons textuels du serveur**. Cliquez sur le salon de votre choix pour y publier le message !
+   - **Raccourci direct** : Vous pouvez aussi taper directement `#nom-du-salon votre message` (ex: `#general Bonjour à tous !` ou `/send #annonces Réunion à 20h`) pour un envoi instantané.
 
 ---
 

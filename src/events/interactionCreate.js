@@ -1,8 +1,6 @@
-/**
- * Événement interactionCreate - Route et exécute les commandes slash.
- */
 import { Events, MessageFlags } from "discord.js";
 import { config } from "../config.js";
+import { handleSelectChannelInteraction } from "../services/messageRelay.js";
 import { logger } from "../utils/logger.js";
 
 export const name = Events.InteractionCreate;
@@ -12,6 +10,15 @@ export const once = false;
  * @param {import('discord.js').Interaction} interaction
  */
 export async function execute(interaction) {
+  // 1. Gestion des menus déroulants (Select Menus)
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId.startsWith("select_channel_")) {
+      await handleSelectChannelInteraction(interaction);
+      return;
+    }
+  }
+
+  // 2. Gestion des commandes slash
   if (!interaction.isChatInputCommand()) {
     return;
   }

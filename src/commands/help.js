@@ -20,27 +20,29 @@ export async function execute(interaction) {
     .setColor(0x5865f2)
     .setTitle("📖 Guide des Commandes YouPulse")
     .setDescription(
-      "YouPulse est un bot Discord sécurisé avec relais bidirectionnel entre vos messages privés et un salon dédié.\n\n" +
-      "**Fonctionnement du relais :**\n" +
-      "• Tout message ou fichier envoyé au bot en **Message Privé (MP)** par le propriétaire est automatiquement retransmis vers le salon configuré.\n" +
-      "• Tout nouveau message publié par les membres dans le salon configuré est notifié dans les **MP du propriétaire**."
+      "YouPulse est un bot Discord sécurisé avec relais bidirectionnel et système de messages anonymes.\n\n" +
+      "**Fonctionnalités en Message Privé (MP) :**\n" +
+      "• **Membres** : Envoyez un message ou `/annonime` en MP au bot pour poster anonymement dans `#anonyme`.\n" +
+      "• **Admins** : Envoyez un message en MP pour choisir le salon du serveur via un menu déroulant ou tapez `#salon message`."
     )
     .addFields(
       {
-        name: "🌐 Commandes Publiques",
+        name: "🌐 Commandes Publiques (Tous les membres)",
         value:
+          "• `/anonyme [message] [fichier]` — Envoie un message 100% anonyme dans le salon #anonyme.\n" +
+          "• `/annonime [message] [fichier]` — Alias identique à /anonyme.\n" +
           "• `/ping` — Vérifie la latence de connexion du bot.\n" +
           "• `/uptime` — Affiche le temps d'activité du processus.\n" +
           "• `/help` — Affiche ce menu d'aide."
       },
       {
-        name: "🔐 Commandes Administrateur (Propriétaire uniquement)",
+        name: "🔐 Commandes Administrateur",
         value:
-          "• `/setchannel [salon]` — Définit le salon Discord de relais actif.\n" +
+          "• `/send [message] [salon] [fichier]` — Publie un message dans n'importe quel salon du serveur.\n" +
+          "• `/setchannel [salon]` — Définit le salon de relais pour les Private Messages.\n" +
           "• `/unsetchannel` — Retire le salon configuré (désactive le relais).\n" +
-          "• `/send [message] [piece_jointe]` — Envoie un message dans le salon configuré.\n" +
           "• `/status` — Affiche l'état du salon, la connexion et les diagnostics.\n" +
-          "• `/testdm` — Envoie un message test en MP au propriétaire pour vérifier la réception."
+          "• `/testdm` — Envoie un message test en MP pour vérifier la réception."
       }
     )
     .setFooter({

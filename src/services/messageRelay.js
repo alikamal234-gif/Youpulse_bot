@@ -1,7 +1,15 @@
 /**
  * Service de relais bidirectionnel de messages entre MP (Propriétaire) et Salon Discord.
  */
-import { EmbedBuilder, AttachmentBuilder, PermissionsBitField } from "discord.js";
+import {
+  EmbedBuilder,
+  AttachmentBuilder,
+  PermissionsBitField,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
+  ChannelType
+} from "discord.js";
 import { config } from "../config.js";
 import { channelStore } from "./channelStore.js";
 import { logger } from "../utils/logger.js";
@@ -87,29 +95,88 @@ export function buildChannelToDmEmbed(message) {
   return embed;
 }
 
+// Cache des messages en attente de sélection de salon par un administrateur en MP
+export const pendingAdminMessages = new Map();
+
 /**
- * Relaye un message privé (DM) de l'administrateur vers le salon configuré.
+ * Analyse le message d'un administrateur en MP pour détecter un salon cible (#salon ou <#id>).
+ * @param {string} text
+ * @param {import('discord.js').Client} client
+ * @returns {{ channel: import('discord.js').TextChannel, text: string }|null}
+ */
+export function parseChannelAndMessage(text, client) {
+  if (!text || typeof text !== "string") return null;
+  const trimmed = text.trim();
+  const match = trimmed.match(/^(?:\/send\s+)?(?:<#(\d+)>|#([a-zA-Z0-9_\-\u0600-\u06FF]+))\s*([\s\S]*)$/i);
+  if (!match) return null;
+
+  const channelId = match[1];
+  const channelName = match[2];
+  const remainingText = match[3] ? match[3].trim() : "";
+
+  if (!client || !client.guilds || !client.guilds.cache) return null;
+
+  for (const guild of client.guilds.cache.values()) {
+    if (!guild.channels || !guild.channels.cache) continue;
+    if (channelId) {
+      const ch = guild.channels.cache.get(channelId);
+      if (ch && ch.isTextBased()) return { channel: ch, text: remainingText };
+    }
+    if (channelName) {
+      const ch = Array.from(guild.channels.cache.values()).find(
+        (c) => c.isTextBased() && c.name.toLowerCase() === channelName.toLowerCase()
+      );
+      if (ch) return { channel: ch, text: remainingText };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Vérifie si un utilisateur est propriétaire du bot ou administrateur d'un serveur commun.
+ * @param {string} userId
+ * @param {import('discord.js').Client} client
+ * @returns {Promise<boolean>}
+ */
+export async function isUserAdminOrOwner(userId, client) {
+  if (userId === config.ownerId) return true;
+  if (!client || !client.guilds || !client.guilds.cache) return false;
+
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      if (guild.ownerId === userId) return true;
+      let member = guild.members.cache.get(userId);
+      if (!member) {
+        member = await guild.members.fetch(userId).catch(() => null);
+      }
+      if (member && member.permissions && member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        return true;
+      }
+    } catch {
+      // Poursuivre la vérification sur les autres serveurs
+    }
+  }
+  return false;
+}
+
+/**
+ * Relaye un message privé (DM) :
+ * - Membre standard : Envoi anonyme dans #anonyme (identité masquée).
+ * - Administrateur : Choix du salon (#salon direct ou menu déroulant de sélection).
  * @param {import('discord.js').Message} message
  * @param {import('discord.js').Client} client
  */
 export async function relayDmToChannel(message, client) {
-  // 1. Vérification de l'autorisation : seul le propriétaire peut relayer
-  if (message.author.id !== config.ownerId) {
-    logger.warn(`[Relay:DM->Salon] Tentative d'envoi non autorisée par l'utilisateur ID: ${message.author.id}`);
+  // 1. Détection du rôle de l'expéditeur (Admin / Propriétaire vs Membre standard)
+  const isAdminOrOwner = await isUserAdminOrOwner(message.author.id, client);
+
+  if (!isAdminOrOwner) {
+    await relayAnonymousDm(message, client);
     return;
   }
 
-  // 2. Vérification de la configuration du salon
-  const targetChannelId = channelStore.getChannelId();
-  if (!targetChannelId) {
-    await message.reply(
-      "⚠️ **Aucun salon de destination n'est configuré.**\n" +
-      "Veuillez définir un salon avec la commande `/setchannel #salon` sur votre serveur Discord."
-    ).catch(() => {});
-    return;
-  }
-
-  // 3. Validation du contenu (ne pas envoyer un message vide sans pièce jointe)
+  // 2. Traitement pour Administrateur / Propriétaire
   const hasText = Boolean(message.content && message.content.trim().length > 0);
   const hasAttachments = message.attachments.size > 0;
 
@@ -118,88 +185,201 @@ export async function relayDmToChannel(message, client) {
     return;
   }
 
-  // 4. Validation de la taille des pièces jointes
   const attachmentsArray = Array.from(message.attachments.values());
   const sizeValidation = validateAttachmentSizes(attachmentsArray);
   if (!sizeValidation.valid) {
     await message.reply(
-      `❌ **Fichier trop volumineux pour l'API Discord (limite 25 Mo) :**\n` +
+      `❌ **Fichier trop volumineux (limite 25 Mo) :**\n` +
       sizeValidation.oversizedFiles.map((f) => `• ${f}`).join("\n")
     ).catch(() => {});
     return;
   }
 
-  // 5. Récupération du salon cible et vérification des permissions
-  let targetChannel;
-  try {
-    targetChannel = await client.channels.fetch(targetChannelId);
-  } catch (err) {
-    logger.error(`[Relay:DM->Salon] Erreur lors de la récupération du salon ${targetChannelId} :`, err.message);
-    await message.reply(
-      `❌ **Erreur d'accès au salon configuré (` + targetChannelId + `).**\n` +
-      `Vérifiez que le salon existe et que le bot a bien été invité sur le serveur.`
-    ).catch(() => {});
-    return;
+  // Cas A : L'administrateur a précisé le salon directement (#salon message ou /send #salon message)
+  const parsed = parseChannelAndMessage(message.content, client);
+  if (parsed) {
+    const targetChannel = parsed.channel;
+    const finalContent = parsed.text || (hasAttachments ? "" : message.content);
+
+    const files = attachmentsArray.map((att) =>
+      new AttachmentBuilder(att.url, { name: att.name || "piece-jointe" })
+    );
+
+    const payload = {};
+    if (finalContent) payload.content = finalContent;
+    if (files.length > 0) payload.files = files;
+
+    try {
+      const sentMessage = await targetChannel.send(payload);
+      logger.info(`[AdminDM:Direct] Message envoyé dans #${targetChannel.name} (ID: ${sentMessage.id}) par l'administrateur`);
+      await message.reply(
+        `✅ **Message publié avec succès dans #${targetChannel.name} !** ([Voir le message](${sentMessage.url}))`
+      ).catch(() => {});
+      return;
+    } catch (err) {
+      logger.error(`[AdminDM:Direct] Échec d'envoi dans #${targetChannel.name} :`, err);
+      await message.reply(`❌ Erreur lors de l'envoi dans #${targetChannel.name} : \`${err.message}\``).catch(() => {});
+      return;
+    }
   }
 
-  if (!targetChannel || !targetChannel.isTextBased()) {
-    await message.reply("❌ Le salon configuré n'est pas un salon textuel valide.").catch(() => {});
-    return;
-  }
-
-  // Vérification des permissions du bot dans le salon de destination
-  if (targetChannel.guild) {
-    const botMember = targetChannel.guild.members.me || await targetChannel.guild.members.fetchMe().catch(() => null);
-    if (botMember) {
-      const perms = targetChannel.permissionsFor(botMember);
-      const requiredPerms = [
-        PermissionsBitField.Flags.ViewChannel,
-        PermissionsBitField.Flags.SendMessages
-      ];
-      if (hasAttachments) {
-        requiredPerms.push(PermissionsBitField.Flags.AttachFiles);
-      }
-
-      const missing = perms ? perms.missing(requiredPerms) : [];
-      if (missing.length > 0) {
-        await message.reply(
-          `❌ **Permissions manquantes dans le salon #${targetChannel.name} :**\n` +
-          missing.map((p) => `• \`${p}\``).join("\n")
-        ).catch(() => {});
-        return;
+  // Cas B : Aucun salon spécifié -> Affichage du menu déroulant interactif
+  const availableChannels = [];
+  if (client.guilds && client.guilds.cache) {
+    for (const guild of client.guilds.cache.values()) {
+      const member = guild.members.cache.get(message.author.id);
+      const isGuildAdmin = message.author.id === config.ownerId || guild.ownerId === message.author.id || member?.permissions?.has(PermissionsBitField.Flags.Administrator);
+      if (isGuildAdmin && guild.channels && guild.channels.cache) {
+        for (const ch of guild.channels.cache.values()) {
+          if (ch.isTextBased() && !ch.isThread() && ch.type !== ChannelType.DM) {
+            availableChannels.push(ch);
+          }
+        }
       }
     }
   }
 
-  // 6. Préparation du payload de transmission
-  const files = attachmentsArray.map((att) =>
+  if (availableChannels.length === 0) {
+    const defaultChannelId = channelStore.getChannelId();
+    if (!defaultChannelId) {
+      await message.reply(
+        "⚠️ **Aucun salon textuel accessible.**\n" +
+        "Précisez le salon avec `#nom-du-salon mon message` ou configurez un salon par défaut avec `/setchannel` sur le serveur."
+      ).catch(() => {});
+      return;
+    }
+  }
+
+  // Stocker le message en mémoire pour la sélection via le menu
+  pendingAdminMessages.set(message.id, {
+    content: message.content,
+    attachments: attachmentsArray,
+    authorId: message.author.id,
+    createdAt: Date.now()
+  });
+
+  setTimeout(() => pendingAdminMessages.delete(message.id), 10 * 60 * 1000);
+
+  const defaultChannelId = channelStore.getChannelId();
+  const selectOptions = availableChannels.slice(0, 25).map((ch) => {
+    const isDefault = ch.id === defaultChannelId;
+    return new StringSelectMenuOptionBuilder()
+      .setLabel(`#${ch.name}${isDefault ? " ⭐ (Défaut)" : ""}`)
+      .setDescription(`Publier dans #${ch.name} (${ch.guild?.name || "Serveur"})`)
+      .setValue(ch.id);
+  });
+
+  if (selectOptions.length === 0 && defaultChannelId) {
+    selectOptions.push(
+      new StringSelectMenuOptionBuilder()
+        .setLabel("Salon configuré par défaut")
+        .setDescription(`ID: ${defaultChannelId}`)
+        .setValue(defaultChannelId)
+    );
+  }
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(`select_channel_${message.id}`)
+    .setPlaceholder("👇 Choisissez le salon où publier ce message...")
+    .addOptions(selectOptions);
+
+  const row = new ActionRowBuilder().addComponents(selectMenu);
+  const preview = message.content
+    ? (message.content.length > 200 ? `${message.content.slice(0, 197)}...` : message.content)
+    : "*(Fichier ou image)*";
+
+  await message.reply({
+    content:
+      `📢 **Publication Administrative**\n\n` +
+      `**Message prêt à être envoyé :**\n> ${preview}\n\n` +
+      `💡 *Astuce : Vous pouvez aussi taper directement \`#salon mon message\`.*\n` +
+      `👇 **Choisissez le salon de destination ci-dessous :**`,
+    components: [row]
+  }).catch(() => {});
+}
+
+/**
+ * Traite la sélection du salon dans le menu déroulant par l'administrateur en MP.
+ * @param {import('discord.js').StringSelectMenuInteraction} interaction
+ */
+export async function handleSelectChannelInteraction(interaction) {
+  if (!interaction.isStringSelectMenu() || !interaction.customId.startsWith("select_channel_")) {
+    return;
+  }
+
+  const messageId = interaction.customId.replace("select_channel_", "");
+  const pending = pendingAdminMessages.get(messageId);
+  const targetChannelId = interaction.values[0];
+
+  if (!pending) {
+    return interaction.update({
+      content: "⚠️ **Ce message a expiré ou a déjà été envoyé.** Renvoyez votre message en MP pour le publier.",
+      components: []
+    }).catch(() => {});
+  }
+
+  let targetChannel;
+  try {
+    targetChannel = await interaction.client.channels.fetch(targetChannelId);
+  } catch (err) {
+    logger.error(`[AdminDM:SelectMenu] Erreur d'accès au salon ${targetChannelId} :`, err.message);
+    return interaction.update({
+      content: `❌ Impossible d'accéder au salon sélectionné (\`${targetChannelId}\`).`,
+      components: []
+    }).catch(() => {});
+  }
+
+  if (!targetChannel || !targetChannel.isTextBased()) {
+    return interaction.update({
+      content: "❌ Le salon choisi n'est pas un salon textuel valide.",
+      components: []
+    }).catch(() => {});
+  }
+
+  // Vérification des permissions
+  if (targetChannel.guild) {
+    const botMember = targetChannel.guild.members.me || await targetChannel.guild.members.fetchMe().catch(() => null);
+    if (botMember) {
+      const perms = targetChannel.permissionsFor(botMember);
+      const required = [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages];
+      if (pending.attachments.length > 0) required.push(PermissionsBitField.Flags.AttachFiles);
+      const missing = perms ? perms.missing(required) : [];
+      if (missing.length > 0) {
+        return interaction.update({
+          content: `❌ Le bot n'a pas les permissions requises dans <#${targetChannel.id}> : ${missing.join(", ")}`,
+          components: []
+        }).catch(() => {});
+      }
+    }
+  }
+
+  const files = pending.attachments.map((att) =>
     new AttachmentBuilder(att.url, { name: att.name || "piece-jointe" })
   );
 
-  const sendPayload = {};
-  if (hasText) {
-    sendPayload.content = message.content;
+  const payload = {};
+  if (pending.content && pending.content.trim().length > 0) {
+    payload.content = pending.content;
   }
   if (files.length > 0) {
-    sendPayload.files = files;
+    payload.files = files;
   }
 
-  // 7. Transmission du message vers le salon cible
   try {
-    const sentMessage = await targetChannel.send(sendPayload);
-    logger.info(`[Relay:DM->Salon] Message relayé avec succès dans #${targetChannel.name} (ID: ${sentMessage.id})`);
+    const sentMessage = await targetChannel.send(payload);
+    pendingAdminMessages.delete(messageId);
+    logger.info(`[AdminDM:SelectMenu] Message publié avec succès dans #${targetChannel.name} (ID: ${sentMessage.id}) par l'administrateur`);
 
-    // 8. Envoi de la confirmation au propriétaire en MP
-    const confirmationText = files.length > 0
-      ? `✅ Message et ${files.length} pièce(s) jointe(s) transmis dans **#${targetChannel.name}** ! ([Lien](${sentMessage.url}))`
-      : `✅ Message transmis dans **#${targetChannel.name}** ! ([Lien](${sentMessage.url}))`;
-
-    await message.reply(confirmationText).catch(() => {});
+    await interaction.update({
+      content: `✅ **Message publié avec succès dans <#${targetChannel.id}> !** ([Voir le message](${sentMessage.url}))`,
+      components: []
+    }).catch(() => {});
   } catch (err) {
-    logger.error(`[Relay:DM->Salon] Échec de transmission vers le salon :`, err);
-    await message.reply(
-      `❌ **Échec de la transmission du message dans #${targetChannel.name}** :\n\`${err.message}\``
-    ).catch(() => {});
+    logger.error(`[AdminDM:SelectMenu] Échec d'envoi dans #${targetChannel.name} :`, err);
+    await interaction.update({
+      content: `❌ Une erreur est survenue lors de l'envoi : \`${err.message}\``,
+      components: []
+    }).catch(() => {});
   }
 }
 
@@ -306,4 +486,92 @@ export async function relayChannelToDm(message, client) {
     `[Relay:Salon->DM] "Private Message" terminé : ${successCount}/${targetUsers.length} reçu(s) ` +
     `(Échecs/MP fermés : ${failedCount}) pour le message de ${message.author.tag} dans #${message.channel.name}`
   );
+}
+
+/**
+ * Relaye un message privé envoyé par un membre ordinaire vers le salon #anonyme de façon 100% anonyme.
+ * @param {import('discord.js').Message} message
+ * @param {import('discord.js').Client} client
+ */
+export async function relayAnonymousDm(message, client) {
+  // Recherche d'un serveur commun avec le bot ayant un salon anonyme
+  let targetChannel = null;
+
+  for (const guild of client.guilds.cache.values()) {
+    const ch = Array.from(guild.channels.cache.values()).find((c) => {
+      if (!c.isTextBased()) return false;
+      const name = c.name.toLowerCase();
+      return name.includes("anonym") || name.includes("annonim") || name.includes("confession");
+    });
+    if (ch) {
+      targetChannel = ch;
+      break;
+    }
+  }
+
+  if (!targetChannel) {
+    await message.reply(
+      "ℹ️ **Service Anonyme YouPulse**\n" +
+      "Aucun salon nommé **#anonyme** n'a été trouvé sur les serveurs auxquels ce bot est connecté.\n" +
+      "👉 Demandez à un administrateur de créer un salon textuel nommé **`anonyme`** (ou `annonime`) pour recevoir vos messages anonymes."
+    ).catch(() => {});
+    return;
+  }
+
+  let cleanText = message.content ? message.content.trim() : "";
+  cleanText = cleanText.replace(/^[/!](?:anonyme|annonime|anonymous|confession)\s*/i, "");
+
+  const hasText = Boolean(cleanText.length > 0);
+  const hasAttachments = message.attachments.size > 0;
+
+  if (!hasText && !hasAttachments) {
+    await message.reply("⚠️ Impossible d'envoyer un message anonyme vide.").catch(() => {});
+    return;
+  }
+
+  const attachmentsArray = Array.from(message.attachments.values());
+  const sizeValidation = validateAttachmentSizes(attachmentsArray);
+  if (!sizeValidation.valid) {
+    await message.reply(
+      `❌ **Fichier trop volumineux (limite 25 Mo) :**\n` +
+      sizeValidation.oversizedFiles.map((f) => `• ${f}`).join("\n")
+    ).catch(() => {});
+    return;
+  }
+
+  // Construction de l'embed anonyme (sans nom d'auteur)
+  const embed = new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setTitle("🎭 Message Anonyme")
+    .setDescription(hasText ? cleanText : "*(Pièce jointe anonyme)*")
+    .setFooter({ text: "Posté anonymement depuis les MP • Identité masquée 🔒" })
+    .setTimestamp();
+
+  const files = [];
+  const firstImage = attachmentsArray.find((att) =>
+    att.contentType?.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(att.name)
+  );
+  if (firstImage) {
+    embed.setImage(firstImage.url);
+  }
+
+  for (const att of attachmentsArray) {
+    files.push(new AttachmentBuilder(att.url, { name: att.name || "fichier-anonyme" }));
+  }
+
+  try {
+    const payload = { embeds: [embed] };
+    if (files.length > 0) payload.files = files;
+
+    const sent = await targetChannel.send(payload);
+    logger.info(`[Relay:AnonymousDM] Message anonyme transmis avec succès dans #${targetChannel.name} (ID: ${sent.id})`);
+
+    await message.reply(
+      `✅ **Votre message a été posté anonymement dans <#${targetChannel.id}> !**\n` +
+      `🔒 Votre identité reste strictement confidentielle.`
+    ).catch(() => {});
+  } catch (err) {
+    logger.error(`[Relay:AnonymousDM] Erreur lors de l'envoi dans #${targetChannel.name} :`, err);
+    await message.reply("❌ Une erreur est survenue lors de l'envoi de votre message anonyme.").catch(() => {});
+  }
 }

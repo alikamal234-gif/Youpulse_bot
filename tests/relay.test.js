@@ -99,3 +99,138 @@ test("Service Relay : Construction de l'Embed de notification", async (t) => {
     assert.ok(embed.data.description.endsWith("..."));
   });
 });
+
+test("Commande Anonyme : Détection automatique du salon anonyme", async (t) => {
+  const { findAnonymousChannel } = await import("../src/commands/anonyme.js");
+
+  await t.test("Trouve le salon 'anonyme' parmi les salons textuels", () => {
+    const mockGuild = {
+      channels: {
+        cache: new Map([
+          ["1", { name: "general", isTextBased: () => true }],
+          ["2", { name: "anonyme", isTextBased: () => true }],
+          ["3", { name: "vocal", isTextBased: () => false }]
+        ])
+      }
+    };
+    const found = findAnonymousChannel(mockGuild);
+    assert.ok(found);
+    assert.equal(found.name, "anonyme");
+  });
+
+  await t.test("Trouve les variantes orthographiques ('annonime', 'confessions')", () => {
+    const mockGuild = {
+      channels: {
+        cache: new Map([
+          ["1", { name: "general", isTextBased: () => true }],
+          ["2", { name: "annonime", isTextBased: () => true }]
+        ])
+      }
+    };
+    const found = findAnonymousChannel(mockGuild);
+    assert.ok(found);
+    assert.equal(found.name, "annonime");
+  });
+
+  await t.test("Retourne null si aucun salon anonyme n'existe", () => {
+    const mockGuild = {
+      channels: {
+        cache: new Map([
+          ["1", { name: "general", isTextBased: () => true }],
+          ["2", { name: "annonces", isTextBased: () => true }]
+        ])
+      }
+    };
+    const found = findAnonymousChannel(mockGuild);
+    assert.equal(found, null);
+  });
+});
+
+test("Service Relay : Détection du salon cible et permissions admin", async (t) => {
+  const { parseChannelAndMessage, isUserAdminOrOwner } = await import("../src/services/messageRelay.js");
+
+  const mockClient = {
+    guilds: {
+      cache: new Map([
+        [
+          "100",
+          {
+            ownerId: "555555555555555555",
+            channels: {
+              cache: new Map([
+                ["101", { id: "101", name: "general", isTextBased: () => true }],
+                ["102", { id: "102", name: "annonces", isTextBased: () => true }],
+                ["103", { id: "103", name: "vocal", isTextBased: () => false }]
+              ])
+            },
+            members: {
+              cache: new Map([
+                [
+                  "777777777777777777",
+                  {
+                    permissions: {
+                      has: (perm) => Boolean(perm)
+                    }
+                  }
+                ],
+                [
+                  "888888888888888888",
+                  {
+                    permissions: {
+                      has: () => false
+                    }
+                  }
+                ]
+              ]),
+              fetch: async () => null
+            }
+          }
+        ]
+      ])
+    }
+  };
+
+  await t.test("parseChannelAndMessage : extrait #salon et le texte", () => {
+    const parsed = parseChannelAndMessage("#general Bonjour tout le monde !", mockClient);
+    assert.ok(parsed);
+    assert.equal(parsed.channel.name, "general");
+    assert.equal(parsed.text, "Bonjour tout le monde !");
+  });
+
+  await t.test("parseChannelAndMessage : extrait /send #salon et le texte", () => {
+    const parsed = parseChannelAndMessage("/send #annonces Réunion ce soir", mockClient);
+    assert.ok(parsed);
+    assert.equal(parsed.channel.name, "annonces");
+    assert.equal(parsed.text, "Réunion ce soir");
+  });
+
+  await t.test("parseChannelAndMessage : extrait <#id> et le texte", () => {
+    const parsed = parseChannelAndMessage("<#101> Message direct", mockClient);
+    assert.ok(parsed);
+    assert.equal(parsed.channel.id, "101");
+    assert.equal(parsed.text, "Message direct");
+  });
+
+  await t.test("parseChannelAndMessage : retourne null si aucun salon n'est spécifié", () => {
+    const parsed = parseChannelAndMessage("Juste un message sans salon", mockClient);
+    assert.equal(parsed, null);
+  });
+
+  await t.test("isUserAdminOrOwner : reconnaît l'administrateur du serveur", async () => {
+    const isAdmin = await isUserAdminOrOwner("777777777777777777", mockClient);
+    assert.equal(isAdmin, true);
+  });
+
+  await t.test("isUserAdminOrOwner : rejette un membre ordinaire", async () => {
+    const isAdmin = await isUserAdminOrOwner("888888888888888888", mockClient);
+    assert.equal(isAdmin, false);
+  });
+});
+
+test("Commande Annonime : Alias vérifié", async () => {
+  const annonimeCmd = await import("../src/commands/annonime.js");
+  assert.equal(annonimeCmd.data.name, "annonime");
+  assert.equal(annonimeCmd.ownerOnly, false);
+  assert.equal(typeof annonimeCmd.execute, "function");
+});
+

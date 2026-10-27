@@ -2,7 +2,13 @@
  * Commande /send - Permet au propriétaire d'envoyer un message et/ou un fichier dans le salon configuré.
  * Réservée au propriétaire autorisé.
  */
-import { SlashCommandBuilder, AttachmentBuilder, PermissionsBitField, MessageFlags } from "discord.js";
+import {
+  SlashCommandBuilder,
+  AttachmentBuilder,
+  PermissionsBitField,
+  MessageFlags,
+  ChannelType
+} from "discord.js";
 import { config } from "../config.js";
 import { channelStore } from "../services/channelStore.js";
 import { MAX_ATTACHMENT_SIZE_BYTES } from "../services/messageRelay.js";
@@ -10,13 +16,20 @@ import { logger } from "../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
   .setName("send")
-  .setDescription("Publie un message dans le salon configuré pour le bot.")
+  .setDescription("Publie un message dans un salon du serveur (réservé aux admins).")
   .addStringOption((option) =>
     option
       .setName("message")
       .setDescription("Le contenu du message à publier")
       .setRequired(true)
       .setMaxLength(2000)
+  )
+  .addChannelOption((option) =>
+    option
+      .setName("salon")
+      .setDescription("Le salon cible où publier (optionnel, sinon salon par défaut)")
+      .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+      .setRequired(false)
   )
   .addAttachmentOption((option) =>
     option
@@ -25,26 +38,42 @@ export const data = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-export const ownerOnly = true;
+export const ownerOnly = false;
 
 /**
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
 export async function execute(interaction) {
-  // 1. Vérification propriétaire
-  if (interaction.user.id !== config.ownerId) {
+  // 1. Vérification des droits administrateur ou propriétaire
+  const isOwner = interaction.user.id === config.ownerId;
+  let isAdmin = interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator);
+
+  // Si exécuté hors guilde ou permissions non disponibles directement, vérifier les serveurs communs
+  if (!isAdmin && interaction.client.guilds) {
+    for (const guild of interaction.client.guilds.cache.values()) {
+      const member = guild.members.cache.get(interaction.user.id);
+      if (member && (member.permissions.has(PermissionsBitField.Flags.Administrator) || guild.ownerId === interaction.user.id)) {
+        isAdmin = true;
+        break;
+      }
+    }
+  }
+
+  if (!isOwner && !isAdmin) {
     logger.warn(`[Command:send] Tentative non autorisée par ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
-      content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire du bot.",
+      content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire et aux administrateurs du serveur.",
       flags: MessageFlags.Ephemeral
     });
   }
 
-  // 2. Vérification de la configuration du salon
-  const targetChannelId = channelStore.getChannelId();
+  // 2. Détermination du salon cible (choisi par l'admin ou par défaut)
+  const chosenChannel = interaction.options.getChannel("salon");
+  const targetChannelId = chosenChannel?.id || channelStore.getChannelId();
+
   if (!targetChannelId) {
     return interaction.reply({
-      content: "⚠️ **Aucun salon n'est configuré.** Utilisez `/setchannel` au préalable pour en désigner un.",
+      content: "⚠️ **Aucun salon spécifié.** Choisissez un salon avec l'option `salon` ou configurez un salon par défaut avec `/setchannel`.",
       flags: MessageFlags.Ephemeral
     });
   }
