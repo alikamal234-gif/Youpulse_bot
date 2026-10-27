@@ -12,6 +12,7 @@ import {
 } from "discord.js";
 import { config } from "../config.js";
 import { channelStore } from "./channelStore.js";
+import { moderateAnonymousMessage } from "./aiModeration.js";
 import { logger } from "../utils/logger.js";
 
 // Limite maximale de taille de fichier pour les uploads Discord standards (25 Mo)
@@ -606,6 +607,20 @@ export async function relayAnonymousDm(message, client) {
       sizeValidation.oversizedFiles.map((f) => `• ${f}`).join("\n")
     ).catch(() => {});
     return;
+  }
+
+  // Modération IA contextuelle (Groq) : validation BDE & École YouCode
+  if (hasText) {
+    const moderation = await moderateAnonymousMessage(cleanText);
+    if (!moderation.allowed) {
+      await message.reply(
+        "⚠️ **Message refusé par la modération IA (YouCode / BDE)**\n\n" +
+        "Votre message a été filtré car il ne semble pas correspondre au contexte de l'école YouCode ou du BDE (études, hackathons, entraide, vie étudiante, questions de cours, feedback...).\n\n" +
+        `💬 **Motif de l'IA :** *${moderation.reason}*\n\n` +
+        "🔒 *Le salon anonyme est réservé aux discussions utiles et constructives pour la communauté étudiante.*"
+      ).catch(() => {});
+      return;
+    }
   }
 
   const payload = buildAnonymousPayload(cleanText, attachmentsArray);

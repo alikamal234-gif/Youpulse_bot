@@ -8,6 +8,7 @@ import {
   MessageFlags
 } from "discord.js";
 import { MAX_ATTACHMENT_SIZE_BYTES, buildAnonymousPayload } from "../services/messageRelay.js";
+import { moderateAnonymousMessage } from "../services/aiModeration.js";
 import { logger } from "../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
@@ -97,7 +98,19 @@ export async function execute(interaction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  // 4. Construction et envoi du message avec le cadre anonyme standardisé
+  // 4. Modération IA contextuelle (Groq) : validation BDE & École YouCode
+  const moderation = await moderateAnonymousMessage(messageText);
+  if (!moderation.allowed) {
+    return interaction.editReply({
+      content:
+        "⚠️ **Message refusé par la modération IA (YouCode / BDE)**\n\n" +
+        "Votre message a été filtré car il ne semble pas correspondre au contexte de l'école YouCode ou du BDE (études, hackathons, entraide, vie étudiante, questions de cours, feedback...).\n\n" +
+        `💬 **Motif de l'IA :** *${moderation.reason}*\n\n` +
+        "🔒 *Le salon anonyme est réservé aux discussions utiles et constructives pour la communauté étudiante.*"
+    });
+  }
+
+  // 5. Construction et envoi du message avec le cadre anonyme standardisé
   try {
     const payload = buildAnonymousPayload(messageText, attachment ? [attachment] : []);
     const sentMessage = await targetChannel.send(payload);

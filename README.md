@@ -246,13 +246,25 @@ Une fois démarré, vous devriez observer un affichage similaire à :
 Lorsque vous envoyez un message directement en MP au bot :
 
 1. **Si vous êtes un Membre Standard** :
-   - Le bot relaie immédiatement votre message ou image dans le salon **`#anonyme`** (ou `#annonime`).
+   - Le message passe automatiquement par la **Modération IA Groq (YouCode & BDE)**.
+   - Si le message est pertinent pour l'école, les études ou le BDE, il est relayé dans **`#anonyme`** (ou `#annonime`).
    - Votre identité (nom, pseudo, avatar) est **strictement masquée**.
+   - Si le message est hors sujet (spam, vente crypto, etc.), l'IA le filtre et vous explique avec bienveillance la raison du refus.
    - Vous pouvez également taper `/annonime votre message` ou simplement votre texte.
 
 2. **Si vous êtes Administrateur ou Propriétaire du serveur** :
    - **Choix par menu déroulant** : Le bot vous répond en MP avec un menu interactif contenant la liste de **tous les salons textuels du serveur**. Cliquez sur le salon de votre choix pour y publier le message !
    - **Raccourci direct** : Vous pouvez aussi taper directement `#nom-du-salon votre message` (ex: `#general Bonjour à tous !` ou `/send #annonces Réunion à 20h`) pour un envoi instantané.
+
+---
+
+## 🤖 Modération IA Contextuelle (Groq & Llama)
+
+Le bot intègre une validation intelligente par IA avant toute publication dans le salon anonyme :
+* **Accepté ✅** : Questions de code, briefs YouCode, entraide, hackathons, tournois, vie étudiante, clubs, réclamations ou suggestions sur le campus, humour d'étudiants.
+* **Refusé ⛔** : Publicité externe, arnaques crypto, messages totalement déconnectés de l'école ou du BDE, harcèlement.
+* **Moteur** : API Groq haute vitesse avec modèle d'inférence sous la seconde.
+* **Fallback sécurisé** : En cas de coupure réseau ou d'indisponibilité de l'API externe, le bot reste 100% opérationnel.
 
 ---
 

@@ -94,5 +94,6 @@ export const config = Object.freeze({
   defaultChannelId: process.env.DISCORD_CHANNEL_ID?.trim() || null,
   guildId: process.env.DISCORD_GUILD_ID?.trim() || null,
   port: process.env.PORT ? parseInt(process.env.PORT, 10) : null,
-  logLevel: (process.env.LOG_LEVEL || "info").toLowerCase()
+  logLevel: (process.env.LOG_LEVEL || "info").toLowerCase(),
+  groqApiKey: process.env.GROQ_API_KEY?.trim() || ""
 });
