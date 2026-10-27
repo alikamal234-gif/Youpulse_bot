@@ -11,7 +11,7 @@ const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_MODEL = "openai/gpt-oss-20b";
 
 // Expressions et termes grossiers / insultes interdits (garde-fou instantané)
-const PROFANITY_REGEX = /\b(zbi|zbbi|9lawi|qlaoui|tbon|tbboun|97ba|qahba|l97ba|kahba|t7wa|thwa|nik|nek|7mar|hmar|klb|kelb|khra|weld\s*l97ba|wld\s*l97ba|m9ewed|mqewed|pute|salope|connard|batard|encule|putain|nique|fdp|fuck|bitch|cunt|asshole|motherfucker|قحبة|كلب|حمار|منيك|زب)\b/i;
+const PROFANITY_REGEX = /(?:^|\s|[^a-zA-Z0-9\u0600-\u06FF])(?:t9[o0]?w[e3]d|t9[o0]?w[e3]r|m9[e3]w[e3]d|mq[e3]w[e3]d|tq[o0]?w[e3]d|q[o0]?w[e3]d|zb[bi]?|z[e3]b[bi]?|9l[a4]w[iy]|ql[a4]w[iy]|tb[o0]+n|t[a4]b[o0]+n|9[a4]?[7h]b[a4]|q[a4]?[7h]b[a4]|k[a4]hb[a4]|w[e3]ld?\s*l?9[a4]?[7h]b[a4]|t7w[a4]|thw[a4]|7w[a4]y|n[i1e]k|n[e3]k|mn[i1e]k|mn[i1e]y[e3]k|7m[a4]r|hm[a4]r|k[e3]lb|klb|t?khr[a4]|khry[a4]|pute|salope|connard|batard|encule|putain|nique|fdp|fuck|bitch|cunt|asshole|motherfucker|dick|قواد|تقود|مكود|قحبة|زبي|قلاوي|طبون|تحوى|نيك|كلب|حمار|تخرا|خرا)(?:$|\s|[^a-zA-Z0-9\u0600-\u06FF])/i;
 
 const SYSTEM_PROMPT = `Tu es le modérateur IA strict du salon anonyme Discord pour le BDE (Bureau Des Étudiants) et les étudiants de l'école YouCode (école de développement informatique).
 
@@ -27,15 +27,16 @@ Ta mission est double et SANS COMPROMIS :
 
    Sont REFUSÉS (allowed = false) :
    - Tout message HORS SUJET n'ayant aucun lien avec l'école, le BDE ou les études (ex: vente de motos/voitures, football pro extérieur, politique, crypto, commerce externe, bavardage personnel sans rapport).
+   - Les messages courts non constructifs, absurdes ou inutiles.
 
 2. TOLÉRANCE ZÉRO POUR LES INSULTES ET GROS MOTS (SBAAN / سب وقذف / VULGARITÉS) :
    AUCUN gros mot, insulte, juron, vulgarité ou terme offensant n'est toléré, QUELLE QUE SOIT LA LANGUE :
-   - En DARIJA MAROCAIN (latin/arabizi ou arabe) : INTERDICTION TOTALE des insultes, sbaan, mots vulgaires ou grossiers (ex: zbi, 9lawi, tbon, 97ba, wld l97ba, 7mar, kelb, t7wa, khra, nik, m9ewed employé vulgairement, etc.).
+   - En DARIJA MAROCAIN (latin/arabizi ou arabe) : INTERDICTION TOTALE des insultes, sbaan, mots vulgaires ou grossiers (ex: t9owed, sir t9owed, m9ewed, tkhra, sir tkhra, zbi, 9lawi, tbon, 97ba, wld l97ba, 7mar, kelb, t7wa, sir t7wa, khra, nik, etc.).
    - En FRANÇAIS : INTERDICTION TOTALE des jurons et insultes (merde, putain, nique, connard, batard, fdp, salope, etc.).
    - En ANGLAIS : INTERDICTION TOTALE (fuck, shit, bitch, cunt, asshole, dick, etc.).
    - En ARABE : INTERDICTION TOTALE de tout mot vulgaire ou insulte.
 
-   ⚠️ RÈGLE D'OR : Même si le message parle de l'école ou du BDE, s'il contient LE MOINDRE gros mot ou insulte (même légère ou familière), il DOIT ÊTRE REFUSÉ (allowed = false).
+   ⚠️ RÈGLE D'OR : Même si le message parle de l'école ou du BDE, s'il contient LE MOINDRE gros mot ou insulte (même familière), il DOIT ÊTRE REFUSÉ (allowed = false).
 
 Réponds STRICTEMENT au format JSON valide suivant :
 {

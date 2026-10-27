@@ -12,6 +12,7 @@ import {
 import { config } from "../config.js";
 import { channelStore } from "../services/channelStore.js";
 import { isAnonymousChannel, buildAnonymousPayload, MAX_ATTACHMENT_SIZE_BYTES } from "../services/messageRelay.js";
+import { moderateAnonymousMessage } from "../services/aiModeration.js";
 import { logger } from "../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
@@ -129,6 +130,16 @@ export async function execute(interaction) {
   try {
     let sendPayload;
     if (isAnonymousChannel(targetChannel)) {
+      const moderation = await moderateAnonymousMessage(messageText);
+      if (!moderation.allowed) {
+        return interaction.editReply({
+          content:
+            "⚠️ **Message refusé par la modération IA (YouCode / BDE)**\n\n" +
+            "Le message a été bloqué car il contient des propos inappropriés ou est hors contexte de l'école/BDE.\n\n" +
+            `💬 **Motif de l'IA :** *${moderation.reason}*\n\n` +
+            "🔒 *Le salon anonyme n'accepte pas les insultes ou les messages hors contexte.*"
+        });
+      }
       sendPayload = buildAnonymousPayload(messageText, attachment ? [attachment] : []);
     } else {
       sendPayload = {

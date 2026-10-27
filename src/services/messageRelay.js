@@ -265,6 +265,16 @@ export async function relayDmToChannel(message, client) {
 
     let payload;
     if (isAnonymousChannel(targetChannel)) {
+      const moderation = await moderateAnonymousMessage(finalContent);
+      if (!moderation.allowed) {
+        await message.reply(
+          "⚠️ **Message refusé par la modération IA (YouCode / BDE)**\n\n" +
+          "Le message a été bloqué car il contient des propos inappropriés ou est hors contexte de l'école/BDE.\n\n" +
+          `💬 **Motif de l'IA :** *${moderation.reason}*\n\n` +
+          "🔒 *Le salon anonyme n'accepte pas les insultes ou les messages hors contexte.*"
+        ).catch(() => {});
+        return;
+      }
       payload = buildAnonymousPayload(finalContent, attachmentsArray);
     } else {
       const files = attachmentsArray.map((att) =>
@@ -421,6 +431,18 @@ export async function handleSelectChannelInteraction(interaction) {
 
   let payload;
   if (isAnonymousChannel(targetChannel)) {
+    const moderation = await moderateAnonymousMessage(pending.content);
+    if (!moderation.allowed) {
+      pendingAdminMessages.delete(messageId);
+      return interaction.update({
+        content:
+          "⚠️ **Message refusé par la modération IA (YouCode / BDE)**\n\n" +
+          "Le message a été bloqué car il contient des propos inappropriés ou est hors contexte de l'école/BDE.\n\n" +
+          `💬 **Motif de l'IA :** *${moderation.reason}*\n\n` +
+          "🔒 *Le salon anonyme n'accepte pas les insultes ou les messages hors contexte.*",
+        components: []
+      }).catch(() => {});
+    }
     payload = buildAnonymousPayload(pending.content, pending.attachments);
   } else {
     const files = pending.attachments.map((att) =>
