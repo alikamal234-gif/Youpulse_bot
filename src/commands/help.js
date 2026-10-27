@@ -1,7 +1,7 @@
 /**
  * Commande /help - Affiche les commandes disponibles, leur syntaxe et les permissions.
  */
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { config } from "../config.js";
 
 export const data = new SlashCommandBuilder()
@@ -52,6 +52,6 @@ export async function execute(interaction) {
 
   await interaction.reply({
     embeds: [embed],
-    ephemeral: !isOwner
+    flags: isOwner ? undefined : MessageFlags.Ephemeral
   });
 }

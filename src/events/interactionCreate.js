@@ -1,7 +1,7 @@
 /**
  * Événement interactionCreate - Route et exécute les commandes slash.
  */
-import { Events } from "discord.js";
+import { Events, MessageFlags } from "discord.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 
@@ -22,7 +22,7 @@ export async function execute(interaction) {
     logger.warn(`[Event:interactionCreate] Commande inconnue reçue : /${interaction.commandName}`);
     return interaction.reply({
       content: "❌ Cette commande n'est plus disponible sur ce bot.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     }).catch(() => {});
   }
 
@@ -31,7 +31,7 @@ export async function execute(interaction) {
     logger.warn(`[Security] Tentative d'exécution de /${interaction.commandName} par un utilisateur non autorisé : ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
       content: "⛔ **Accès refusé** : Vous n'êtes pas autorisé à utiliser cette commande administrative.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     }).catch(() => {});
   }
 
@@ -44,9 +44,9 @@ export async function execute(interaction) {
 
     try {
       if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({ content: errorMessage, ephemeral: true });
+        await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral });
       } else {
-        await interaction.reply({ content: errorMessage, ephemeral: true });
+        await interaction.reply({ content: errorMessage, flags: MessageFlags.Ephemeral });
       }
     } catch (replyErr) {
       logger.error("[Event:interactionCreate] Impossible d'envoyer le message d'erreur :", replyErr.message);

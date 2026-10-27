@@ -2,7 +2,7 @@
  * Commande /setchannel - Configure le salon utilisé pour la publication et les notifications.
  * Réservée au propriétaire autorisé.
  */
-import { SlashCommandBuilder, ChannelType, PermissionsBitField, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, ChannelType, PermissionsBitField, EmbedBuilder, MessageFlags } from "discord.js";
 import { config } from "../config.js";
 import { channelStore } from "../services/channelStore.js";
 import { logger } from "../utils/logger.js";
@@ -29,7 +29,7 @@ export async function execute(interaction) {
     logger.warn(`[Command:setchannel] Tentative non autorisée par ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
       content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire du bot.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
@@ -38,7 +38,7 @@ export async function execute(interaction) {
   if (!selectedChannel || !selectedChannel.isTextBased()) {
     return interaction.reply({
       content: "❌ Veuillez sélectionner un salon textuel valide.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
@@ -60,7 +60,7 @@ export async function execute(interaction) {
           `⚠️ **Permissions insuffisantes dans <#${selectedChannel.id}> !**\n` +
           `Le bot nécessite les permissions suivantes pour fonctionner correctement :\n` +
           missing.map((p) => `• \`${p}\``).join("\n"),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   }
@@ -85,6 +85,6 @@ export async function execute(interaction) {
 
   await interaction.reply({
     embeds: [embed],
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }

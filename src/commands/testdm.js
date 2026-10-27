@@ -2,7 +2,7 @@
  * Commande /testdm - Envoie un message direct de test au propriétaire pour vérifier la communication.
  * Réservée au propriétaire autorisé.
  */
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 
@@ -21,11 +21,11 @@ export async function execute(interaction) {
     logger.warn(`[Command:testdm] Tentative non autorisée par ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
       content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire du bot.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     const owner = await interaction.client.users.fetch(config.ownerId);

@@ -27,6 +27,10 @@ async function deploy() {
     logger.info(`Début de l'enregistrement de ${commandsData.length} commande(s) slash...`);
 
     if (config.guildId) {
+      // Nettoyage des commandes globales pour éviter les doublons d'affichage
+      logger.info("Suppression des commandes globales pour éviter la duplication...");
+      await rest.put(Routes.applicationCommands(config.clientId), { body: [] });
+
       // Déploiement spécifique à un serveur (instantané pour les tests / dev)
       logger.info(`Mode Serveur : Enregistrement sur le serveur ID : ${config.guildId}`);
       const data = await rest.put(

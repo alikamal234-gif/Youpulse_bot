@@ -2,7 +2,7 @@
  * Commande /status - Affiche le salon configuré, l'état de connexion et le statut système.
  * Réservée au propriétaire autorisé.
  */
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { config } from "../config.js";
 import { channelStore } from "../services/channelStore.js";
 import { logger } from "../utils/logger.js";
@@ -22,7 +22,7 @@ export async function execute(interaction) {
     logger.warn(`[Command:status] Tentative non autorisée par ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
       content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire du bot.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
@@ -76,6 +76,6 @@ export async function execute(interaction) {
 
   await interaction.reply({
     embeds: [embed],
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }

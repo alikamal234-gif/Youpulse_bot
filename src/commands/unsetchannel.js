@@ -2,7 +2,7 @@
  * Commande /unsetchannel - Supprime ou désactive le salon de relais configuré (l'inverse de /setchannel).
  * Réservée au propriétaire autorisé.
  */
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { config } from "../config.js";
 import { channelStore } from "../services/channelStore.js";
 import { logger } from "../utils/logger.js";
@@ -22,7 +22,7 @@ export async function execute(interaction) {
     logger.warn(`[Command:unsetchannel] Tentative non autorisée par ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
       content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire du bot.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
@@ -31,7 +31,7 @@ export async function execute(interaction) {
   if (!previousChannelId) {
     return interaction.reply({
       content: "ℹ️ **Aucun salon n'est actuellement configuré.** Il n'y a aucun salon à retirer.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
@@ -56,6 +56,6 @@ export async function execute(interaction) {
 
   await interaction.reply({
     embeds: [embed],
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   });
 }

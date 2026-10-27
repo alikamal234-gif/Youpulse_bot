@@ -2,7 +2,7 @@
  * Commande /send - Permet au propriétaire d'envoyer un message et/ou un fichier dans le salon configuré.
  * Réservée au propriétaire autorisé.
  */
-import { SlashCommandBuilder, AttachmentBuilder, PermissionsBitField } from "discord.js";
+import { SlashCommandBuilder, AttachmentBuilder, PermissionsBitField, MessageFlags } from "discord.js";
 import { config } from "../config.js";
 import { channelStore } from "../services/channelStore.js";
 import { MAX_ATTACHMENT_SIZE_BYTES } from "../services/messageRelay.js";
@@ -36,7 +36,7 @@ export async function execute(interaction) {
     logger.warn(`[Command:send] Tentative non autorisée par ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
       content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire du bot.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
@@ -45,7 +45,7 @@ export async function execute(interaction) {
   if (!targetChannelId) {
     return interaction.reply({
       content: "⚠️ **Aucun salon n'est configuré.** Utilisez `/setchannel` au préalable pour en désigner un.",
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
@@ -56,11 +56,11 @@ export async function execute(interaction) {
   if (attachment && attachment.size > MAX_ATTACHMENT_SIZE_BYTES) {
     return interaction.reply({
       content: `❌ Le fichier est trop lourd (${(attachment.size / (1024 * 1024)).toFixed(1)} Mo). La limite Discord est de 25 Mo.`,
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   // 4. Récupération du salon
   let targetChannel;
