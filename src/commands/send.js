@@ -9,9 +9,13 @@ import {
   MessageFlags,
   ChannelType
 } from "discord.js";
-import { config } from "../config.js";
 import { channelStore } from "../services/channelStore.js";
-import { isAnonymousChannel, buildAnonymousPayload, MAX_ATTACHMENT_SIZE_BYTES } from "../services/messageRelay.js";
+import {
+  isAnonymousChannel,
+  buildAnonymousPayload,
+  MAX_ATTACHMENT_SIZE_BYTES,
+  isUserAdminOrOwner
+} from "../services/messageRelay.js";
 import { moderateAnonymousMessage } from "../services/aiModeration.js";
 import { logger } from "../utils/logger.js";
 
@@ -45,25 +49,13 @@ export const ownerOnly = false;
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
 export async function execute(interaction) {
-  // 1. Vérification des droits administrateur ou propriétaire
-  const isOwner = interaction.user.id === config.ownerId;
-  let isAdmin = interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator);
+  // 1. Vérification des droits administrateur ou propriétaire (rôle admin, permissions ou propriétaire)
+  const isAllowed = await isUserAdminOrOwner(interaction.user.id, interaction.client);
 
-  // Si exécuté hors guilde ou permissions non disponibles directement, vérifier les serveurs communs
-  if (!isAdmin && interaction.client.guilds) {
-    for (const guild of interaction.client.guilds.cache.values()) {
-      const member = guild.members.cache.get(interaction.user.id);
-      if (member && (member.permissions.has(PermissionsBitField.Flags.Administrator) || guild.ownerId === interaction.user.id)) {
-        isAdmin = true;
-        break;
-      }
-    }
-  }
-
-  if (!isOwner && !isAdmin) {
+  if (!isAllowed) {
     logger.warn(`[Command:send] Tentative non autorisée par ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
-      content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire et aux administrateurs du serveur.",
+      content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire et aux administrateurs (rôle Admin).",
       flags: MessageFlags.Ephemeral
     });
   }

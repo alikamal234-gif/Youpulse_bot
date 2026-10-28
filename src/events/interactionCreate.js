@@ -1,6 +1,5 @@
 import { Events, MessageFlags } from "discord.js";
-import { config } from "../config.js";
-import { handleSelectChannelInteraction } from "../services/messageRelay.js";
+import { handleSelectChannelInteraction, isUserAdminOrOwner } from "../services/messageRelay.js";
 import { logger } from "../utils/logger.js";
 
 export const name = Events.InteractionCreate;
@@ -33,13 +32,16 @@ export async function execute(interaction) {
     }).catch(() => {});
   }
 
-  // Vérification de sécurité pour les commandes réservées au propriétaire
-  if (command.ownerOnly && interaction.user.id !== config.ownerId) {
-    logger.warn(`[Security] Tentative d'exécution de /${interaction.commandName} par un utilisateur non autorisé : ${interaction.user.tag} (${interaction.user.id})`);
-    return interaction.reply({
-      content: "⛔ **Accès refusé** : Vous n'êtes pas autorisé à utiliser cette commande administrative.",
-      flags: MessageFlags.Ephemeral
-    }).catch(() => {});
+  // Vérification de sécurité pour les commandes réservées aux administrateurs / propriétaire
+  if (command.ownerOnly) {
+    const isAllowed = await isUserAdminOrOwner(interaction.user.id, interaction.client);
+    if (!isAllowed) {
+      logger.warn(`[Security] Tentative d'exécution de /${interaction.commandName} par un utilisateur non autorisé : ${interaction.user.tag} (${interaction.user.id})`);
+      return interaction.reply({
+        content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire et aux administrateurs (rôle Admin).",
+        flags: MessageFlags.Ephemeral
+      }).catch(() => {});
+    }
   }
 
   try {

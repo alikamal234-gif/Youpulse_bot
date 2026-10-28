@@ -216,8 +216,74 @@ test("Service Relay : Détection du salon cible et permissions admin", async (t)
     assert.equal(parsed, null);
   });
 
-  await t.test("isUserAdminOrOwner : reconnaît l'administrateur du serveur", async () => {
+  await t.test("isUserAdminOrOwner : reconnaît l'administrateur du serveur via permissions", async () => {
     const isAdmin = await isUserAdminOrOwner("777777777777777777", mockClient);
+    assert.equal(isAdmin, true);
+  });
+
+  await t.test("isUserAdminOrOwner : reconnaît un membre avec le rôle 'Admin' (sans permission admin native)", async () => {
+    const clientWithRole = {
+      guilds: {
+        cache: new Map([
+          [
+            "100",
+            {
+              ownerId: "555555555555555555",
+              members: {
+                cache: new Map([
+                  [
+                    "999999999999999999",
+                    {
+                      permissions: { has: () => false },
+                      roles: {
+                        cache: new Map([
+                          ["r1", { id: "r1", name: "Admin" }]
+                        ])
+                      }
+                    }
+                  ]
+                ]),
+                fetch: async () => null
+              }
+            }
+          ]
+        ])
+      }
+    };
+    const isAdmin = await isUserAdminOrOwner("999999999999999999", clientWithRole);
+    assert.equal(isAdmin, true);
+  });
+
+  await t.test("isUserAdminOrOwner : reconnaît un membre avec le rôle 'Administrateur' ou 'Admin BDE'", async () => {
+    const clientWithBdeRole = {
+      guilds: {
+        cache: new Map([
+          [
+            "100",
+            {
+              ownerId: "555555555555555555",
+              members: {
+                cache: new Map([
+                  [
+                    "111222333444555666",
+                    {
+                      permissions: { has: () => false },
+                      roles: {
+                        cache: new Map([
+                          ["r2", { id: "r2", name: "BDE Admin" }]
+                        ])
+                      }
+                    }
+                  ]
+                ]),
+                fetch: async () => null
+              }
+            }
+          ]
+        ])
+      }
+    };
+    const isAdmin = await isUserAdminOrOwner("111222333444555666", clientWithBdeRole);
     assert.equal(isAdmin, true);
   });
 

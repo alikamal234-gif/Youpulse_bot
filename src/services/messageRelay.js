@@ -196,23 +196,86 @@ export function parseChannelAndMessage(text, client) {
 }
 
 /**
- * Vérifie si un utilisateur est propriétaire du bot ou administrateur d'un serveur commun.
+ * Vérifie si un membre possède un rôle ayant "admin" dans son nom ou des permissions administratives.
+ * @param {import('discord.js').GuildMember|object} member
+ * @param {import('discord.js').Guild|object} [guild]
+ * @returns {boolean}
+ */
+export function hasAdminRole(member, guild) {
+  if (!member) return false;
+
+  // 1. Permissions natives Discord (Administrateur ou Gérer le serveur)
+  if (member.permissions && typeof member.permissions.has === "function") {
+    if (
+      member.permissions.has(PermissionsBitField.Flags.Administrator) ||
+      member.permissions.has(PermissionsBitField.Flags.ManageGuild)
+    ) {
+      return true;
+    }
+  }
+
+  // 2. Collection des rôles du membre (member.roles.cache)
+  if (member.roles && member.roles.cache) {
+    const rolesIterable = typeof member.roles.cache.values === "function"
+      ? Array.from(member.roles.cache.values())
+      : Array.isArray(member.roles.cache)
+        ? member.roles.cache
+        : [];
+
+    for (const role of rolesIterable) {
+      if (role?.name && /admin|administra/i.test(role.name)) {
+        return true;
+      }
+      if (role?.permissions && typeof role.permissions.has === "function") {
+        if (role.permissions.has(PermissionsBitField.Flags.Administrator)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // 3. Tableau de rôles (IDs ou objets)
+  if (Array.isArray(member.roles)) {
+    for (const r of member.roles) {
+      if (typeof r === "string") {
+        const roleObj = guild?.roles?.cache?.get ? guild.roles.cache.get(r) : null;
+        if (roleObj?.name && /admin|administra/i.test(roleObj.name)) return true;
+        if (roleObj?.permissions && typeof roleObj.permissions.has === "function") {
+          if (roleObj.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
+        }
+      } else if (r && typeof r === "object") {
+        if (r.name && /admin|administra/i.test(r.name)) return true;
+        if (r.permissions && typeof r.permissions.has === "function") {
+          if (r.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Vérifie si un utilisateur est propriétaire du bot, propriétaire du serveur, possède un rôle "Admin" ou des permissions administratives.
  * @param {string} userId
  * @param {import('discord.js').Client} client
  * @returns {Promise<boolean>}
  */
 export async function isUserAdminOrOwner(userId, client) {
+  if (!userId || typeof userId !== "string") return false;
   if (userId === config.ownerId) return true;
   if (!client || !client.guilds || !client.guilds.cache) return false;
 
   for (const guild of client.guilds.cache.values()) {
     try {
       if (guild.ownerId === userId) return true;
-      let member = guild.members.cache.get(userId);
-      if (!member) {
+
+      let member = guild.members?.cache?.get ? guild.members.cache.get(userId) : null;
+      if (!member && typeof guild.members?.fetch === "function") {
         member = await guild.members.fetch(userId).catch(() => null);
       }
-      if (member && member.permissions && member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+
+      if (member && hasAdminRole(member, guild)) {
         return true;
       }
     } catch {

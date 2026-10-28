@@ -3,7 +3,7 @@
  * Réservée au propriétaire autorisé.
  */
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
-import { config } from "../config.js";
+import { isUserAdminOrOwner } from "../services/messageRelay.js";
 import { logger } from "../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
@@ -16,11 +16,12 @@ export const ownerOnly = true;
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
 export async function execute(interaction) {
-  // 1. Vérification propriétaire
-  if (interaction.user.id !== config.ownerId) {
+  // 1. Vérification propriétaire / admin (rôle Admin ou permissions)
+  const isAllowed = await isUserAdminOrOwner(interaction.user.id, interaction.client);
+  if (!isAllowed) {
     logger.warn(`[Command:testdm] Tentative non autorisée par ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
-      content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire du bot.",
+      content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire et aux administrateurs (rôle Admin).",
       flags: MessageFlags.Ephemeral
     });
   }
@@ -28,12 +29,7 @@ export async function execute(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    const owner = await interaction.client.users.fetch(config.ownerId);
-    if (!owner) {
-      return interaction.editReply({
-        content: `❌ Impossible de récupérer votre profil Discord avec l'ID \`${config.ownerId}\`.`
-      });
-    }
+    const targetUser = interaction.user;
 
     const testEmbed = new EmbedBuilder()
       .setColor(0x57f287)
@@ -49,7 +45,7 @@ export async function execute(interaction) {
       .setFooter({ text: "YouPulse Bot • Test de connectivité DM" })
       .setTimestamp();
 
-    await owner.send({ embeds: [testEmbed] });
+    await targetUser.send({ embeds: [testEmbed] });
 
     await interaction.editReply({
       content: "✅ **Test réussi !** Un message privé de vérification vient de vous être envoyé."

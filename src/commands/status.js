@@ -5,6 +5,7 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
 import { config } from "../config.js";
 import { channelStore } from "../services/channelStore.js";
+import { isUserAdminOrOwner } from "../services/messageRelay.js";
 import { logger } from "../utils/logger.js";
 
 export const data = new SlashCommandBuilder()
@@ -17,11 +18,12 @@ export const ownerOnly = true;
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
 export async function execute(interaction) {
-  // 1. Vérification propriétaire
-  if (interaction.user.id !== config.ownerId) {
+  // 1. Vérification propriétaire / admin (rôle Admin ou permissions)
+  const isAllowed = await isUserAdminOrOwner(interaction.user.id, interaction.client);
+  if (!isAllowed) {
     logger.warn(`[Command:status] Tentative non autorisée par ${interaction.user.tag} (${interaction.user.id})`);
     return interaction.reply({
-      content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire du bot.",
+      content: "⛔ **Accès refusé** : Cette commande administrative est réservée au propriétaire et aux administrateurs (rôle Admin).",
       flags: MessageFlags.Ephemeral
     });
   }

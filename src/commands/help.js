@@ -2,7 +2,7 @@
  * Commande /help - Affiche les commandes disponibles, leur syntaxe et les permissions.
  */
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags } from "discord.js";
-import { config } from "../config.js";
+import { isUserAdminOrOwner } from "../services/messageRelay.js";
 
 export const data = new SlashCommandBuilder()
   .setName("help")
@@ -14,7 +14,7 @@ export const ownerOnly = false;
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
 export async function execute(interaction) {
-  const isOwner = interaction.user.id === config.ownerId;
+  const isAllowed = await isUserAdminOrOwner(interaction.user.id, interaction.client);
 
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
@@ -46,14 +46,14 @@ export async function execute(interaction) {
       }
     )
     .setFooter({
-      text: isOwner
-        ? "👑 Vous êtes identifié comme Propriétaire autorisé."
+      text: isAllowed
+        ? "👑 Vous êtes identifié comme Administrateur autorisé (rôle Admin / Propriétaire)."
         : "ℹ️ Vous êtes en mode utilisateur standard."
     })
     .setTimestamp();
 
   await interaction.reply({
     embeds: [embed],
-    flags: isOwner ? undefined : MessageFlags.Ephemeral
+    flags: isAllowed ? undefined : MessageFlags.Ephemeral
   });
 }
